@@ -201,10 +201,7 @@ function encrypt(data, e, n, lhash)
 
 function sign(m)
 {
-    var s = new String(m);
-
-    s += "#" + getPaddedHex(new Date().getTime(), 11) + getPaddedHex(this.count++, 2);
-
+    m += "#" + getPaddedHex(new Date().getTime(), 11) + getPaddedHex(this.count++, 2);
     var h = hashGenerator.hash(string2codeBytes(m));
     var sig = encryptBlock(h, 0, h.length, this.d, this.n, this.lhash);
 
@@ -215,13 +212,13 @@ function sign(m)
 function verify(m)
 {
     var strings = m.split("`");
-    var thisTimeStamp = strings[0].substring(strings[0].length() - 13);
+    var thisTimeStamp = strings[0].substring(strings[0].length - 13);
     if (thisTimeStamp <= this.lastTimeStamp)
     {
         return false;
     }
 
-    var h = decryptBlock(string2codeBytes(base64toBytes(strings[1])), 0, this.ee, this.nn, this.myhash);
+    var h = decryptBlock(base64toBytes(strings[1]), 0, this.ee, this.nn, this.myhash);
     var restored = hashGenerator.hash(string2codeBytes(strings[0]));
 
     for (var i = 0; i < h.length; i++)

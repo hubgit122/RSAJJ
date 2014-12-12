@@ -1180,7 +1180,7 @@ function bnToByteArray()
     {
         if (p < this.DB && (d = this[i] >> p) != (this.s & this.DM) >> p)
         {
-            r[k++] = d | (this.s << (this.DB - p));
+            r[k++] = 255 & d | (this.s << (this.DB - p));
         }
         while (i >= 0)
         {
@@ -1208,7 +1208,7 @@ function bnToByteArray()
             }
             if (k > 0 || d != this.s)
             {
-                r[k++] = d;
+                r[k++] = 255 & d;
             }
         }
     }

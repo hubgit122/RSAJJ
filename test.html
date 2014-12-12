@@ -12,49 +12,51 @@
     <script>
 
         var tmp;
-//        print("bytesToHexString: " + bytesToHexString([0, 1, 2, 25, 127, 255]));
-//        print("int2bytes: " + bytesToHexString(int2bytes(0xff01)));
-//        print("string2codeBytes: " + bytesToHexString(string2codeBytes("我ss")));
-//        print("string2codeBytes: " + string2codeBytes("我ss"));
-//        tmp = string2codeBytes("我ss");
-//        print(codeBytes2string(tmp));
-//
-//        tmp = utf8Encode("请将您要转换的汉文内容粘贴在这里。");
-//        print("utf8Encode: " + bytesToHexString(tmp));
-//        print("utf8decode: " + utf8decode(tmp));
-//
-//        tmp = utf8Encode("请将您要转换的汉文内容粘贴在sdfa这里。");
-//        print("bytes2base64: " + bytes2base64(tmp));
-//        print("base64toBytes: " + utf8decode(base64toBytes(bytes2base64(tmp))));
-//        print("getPaddedHex: " + getPaddedHex(1, 5));
-//        print("getPaddedHex: " + getPaddedHex(655364564, 5));
-//        print("hexStringToBytes: " + hexStringToBytes(getPaddedHex(1, 8)));
-//        print("hexStringToBytes: " + hexStringToBytes(getPaddedHex(655364564, 8)));
-//        var a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
-//        var b = ["a", "b", 1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
-//        copyRange(a, 2, b, 3, 7);
-//        print("copyRange: " + b + a);
-//        var c = [2, 3, 4, 5, 6, 7, 8, 9, 0, 1];
-//        xorNoCopy(a, c, 1, 7);
-//        print("xorNoCopy: " + c + a);
-//
-//        print(bytesToHexString(utf8Encode("testtt")));
-//        print(bytesToHexString(MD5(utf8Encode("testtt"))));
-//
-//        tmp = parseBigInt("FF", 16);
-//        print(tmp.toString(16));
+        //        print("bytesToHexString: " + bytesToHexString([0, 1, 2, 25, 127, 255]));
+        //        print("int2bytes: " + bytesToHexString(int2bytes(0xff01)));
+        //        print("string2codeBytes: " + bytesToHexString(string2codeBytes("我ss")));
+        //        print("string2codeBytes: " + string2codeBytes("我ss"));
+        //        tmp = string2codeBytes("我ss");
+        //        print(codeBytes2string(tmp));
+        //
+        //        tmp = utf8Encode("请将您要转换的汉文内容粘贴在这里。");
+        //        print("utf8Encode: " + bytesToHexString(tmp));
+        //        print("utf8decode: " + utf8decode(tmp));
+        //
+        //        tmp = utf8Encode("请将您要转换的汉文内容粘贴在sdfa这里。");
+        //        print("bytes2base64: " + bytes2base64(tmp));
+        //        print("base64toBytes: " + utf8decode(base64toBytes(bytes2base64(tmp))));
+        //        print("getPaddedHex: " + getPaddedHex(1, 5));
+        //        print("getPaddedHex: " + getPaddedHex(655364564, 5));
+        //        print("hexStringToBytes: " + hexStringToBytes(getPaddedHex(1, 8)));
+        //        print("hexStringToBytes: " + hexStringToBytes(getPaddedHex(655364564, 8)));
+        //        var a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+        //        var b = ["a", "b", 1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+        //        copyRange(a, 2, b, 3, 7);
+        //        print("copyRange: " + b + a);
+        //        var c = [2, 3, 4, 5, 6, 7, 8, 9, 0, 1];
+        //        xorNoCopy(a, c, 1, 7);
+        //        print("xorNoCopy: " + c + a);
+        //
+        //        print(bytesToHexString(utf8Encode("testtt")));
+        //        print(bytesToHexString(MD5(utf8Encode("testtt"))));
+        //
+        //        tmp = parseBigInt("FF", 16);
+        //        print(tmp.toString(16));
 
         var rsa = new RSAKey();
-//        print(rsa.e.toString(16));
-//        print(rsa.d.toString(16));
-//        print(rsa.n.toString(16));
+        //        print(rsa.e.toString(16));
+        //        print(rsa.d.toString(16));
+        //        print(rsa.n.toString(16));
 
-        var en = rsa.encrypt(utf8Encode("test"));
-        print("--------------------------------------------------");
+        var en = rsa.encrypt(utf8Encode("test我方吉萨东风i精氨酸了的看法就拉上了的客服及后卫发了家发改委哦啊恢复萨加莱卡圣诞节分外偶尔回头i额若IFA几点睡了咖啡讲的是"));
         print(bytesToHexString(en));
-        print("--------------------------------------------------");
         print(utf8decode(rsa.decrypt(en)));
 
+        rsa.addConterpart(rsa.n, rsa.e);
+        tmp = rsa.sign("test");
+        print(tmp);
+        print(rsa.verify(tmp))
     </script>
 </head>
 
