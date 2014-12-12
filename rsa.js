@@ -1,249 +1,274 @@
-// Depends on jsbn.js and rng.js
-// Version 1.1: support utf-8 encoding in pkcs1pad2
-// convert a (hex) string to a bignum object
+var hashGenerator = {
+    length: 16,
+    hash  : function (m)
+    {
+        return MD5(m);
+    }
+};
 
+var ModulusLength = 128;
+var MaxBlockSize = ModulusLength - 2 * hashGenerator.length - 2;
 
 function parseBigInt(str, r)
 {
     return new BigInteger(str, r);
 }
 
-function linebrk(s, n)
+function doModPow(em, e, n)
 {
-    var ret = "";
-    var i = 0;
-    while (i + n < s.length)
-    {
-        ret += s.substring(i, i + n) + "\n";
-        i += n;
-    }
-    return ret + s.substring(i, s.length);
+    return parseBigInt(bytesToHexString(em), 16).modPow(e, n).toByteArray();
 }
 
-function byte2Hex(b)
+function addConterpart(n, e)
 {
-    if (b < 0x10)
+    this.nn = n;
+    this.ee = e;
+    this.lhash = hashGenerator.hash(n.toByteArray());
+    this.count = 0;
+    this.lastTimeStamp = "0000000000000";
+}
+
+//整数, 填充到len长, 不检查
+function i2osp(i, len)
+{
+    var result = new Array(len);
+
+    for (var j = 0; j < len; j++)
     {
-        return "0" + b.toString(16);
+        result[j] = i & 255;
+        i >>>= 8;
+    }
+    return result;
+}
+
+function maskGen(seed, len, offset, srclen)
+{
+    offset = offset || 0;
+    srclen = srclen || seed.length;
+
+    var k = divideNoRemain(len, hashGenerator.length);
+    var result = new Array(len);
+    var x = new Array(srclen + 4);
+    copyRange(seed, offset, x, 0, srclen);
+
+    offset = 0;
+    var i;
+    for (i = 0; i < k; ++i)
+    {
+        var c = i2osp(i, 4);
+        copyRange(c, 0, x, srclen, 4);
+        md5 = hashGenerator.hash(x);
+        copyRange(md5, 0, result, offset, hashGenerator.length);
+        offset += hashGenerator.length;
+    }
+    if (offset < len)
+    {
+        c = i2osp(i, 4);
+        copyRange(c, 0, x, srclen, 4);
+        var md5 = hashGenerator.hash(x);
+
+        copyRange(md5, 0, result, offset, len - offset);
+    }
+
+    return result;
+}
+
+function trimToK(data)
+{
+    if (data.length == ModulusLength)
+    {
+        return data;
+    }
+    else if (data.length > ModulusLength)
+    {
+        return data.slice(data.length - ModulusLength);
     }
     else
     {
-        return b.toString(16);
+        var pad = new Array(ModulusLength - data.length);
+        for (var i = 0; i < pad.length; i++)
+        {
+            pad[i] = 0
+        }
+
+        return pad.concat(data);
     }
 }
 
-// PKCS#1 (type 2, random) pad input string s to n bytes, and return a bigint
-function pkcs1pad2(s, n)
+function encryptBlock(data, offset, len, e, n, lhash)
 {
-    var realLength = function (str)
+    // 初始化加密块, 默认全置0 {1'b0, h' maskedSeed, h' lhash, k-mlen-2h-2' ps, 1'b1, len'm}
+    var em = new Array(ModulusLength);
+    var k = ModulusLength - data.length - 1;
+    for (var i = (hashGenerator.length << 1) + 1; i < k; ++i)
     {
-        var bytesCount = 0;
-        for (var i = 0; i < str.length; i++)
-        {
-//            bytesCount+= Math.ceil(Math.log(c)/Math.LN2/8)    too slow
-            bytesCount++;
-            for (var c = str.charCodeAt(i); c >= 256; c /= 256)
-            {
-                bytesCount++
-            }
-        }
-    };
+        em[i] = 0;
+    }
 
-    if (n < realLength(s) + 11)
+    for (i = 0; i < hashGenerator.length + 1; ++i)
     {
-        throw "Message too long for RSA (n=" + n + ", l=" + s.length + ")";
+        em[i] = 0;
     }
-    var ba = [];
-    var i = s.length - 1;
-    while (i >= 0 && n > 0)
-    {
-        for (var c = s.charCodeAt(i); c >= 256; c /= 256)
-        {
-            ba[--n] = c%256;
-        }
-        i--
-    }
-    ba[--n] = 0;
-    var rng = new SecureRandom();
-    var x = [];
-    while (n > 2)
-    { // random non-zero pad
-        x[0] = 0;
-        while (x[0] == 0)
-        {
-            rng.nextBytes(x);
-        }
-        ba[--n] = x[0];
-    }
-    ba[--n] = 2;
-    ba[--n] = 0;
-    return new BigInteger(ba);
+
+    copyRange(lhash, 0, em, hashGenerator.length + 1, hashGenerator.length);
+    em[ModulusLength - len - 1] = 1;
+    copyRange(data, offset, em, ModulusLength - len, len);
+
+    var seed = hashGenerator.hash(string2codeBytes("" + Math.random()));
+    copyRange(seed, 0, em, 1, hashGenerator.length);
+    var dbMask = maskGen(seed, ModulusLength - hashGenerator.length - 1);
+    xorNoCopy(em, dbMask, hashGenerator.length + 1, dbMask.length);
+    var seedMask = maskGen(em, hashGenerator.length, hashGenerator.length + 1, ModulusLength - 1 - hashGenerator.length);
+    xorNoCopy(em, seedMask, 1, dbMask.length);
+    var en = doModPow(em, e, n);
+
+    return trimToK(en);
 }
 
-// Version 1.1: support utf-8 decoding in pkcs1unpad2
-// Undo PKCS#1 (type 2, random) padding and, if valid, return the plaintext
-function pkcs1unpad2(d, n)
+function decryptBlock(data, offset, e, n, lhash)
 {
-    var b = d.toByteArray();
-    var i = 0;
-    while (i < b.length && b[i] == 0)
+    // {1'b0, h' maskedSeed, {h' lhash, k-mlen-2h-2' ps, 1'b1, len'm}}
+    var c = new Array(ModulusLength);
+    copyRange(data, offset, c, 0, ModulusLength);
+
+    var em = trimToK(doModPow(c, e, n));
+
+    var seedMask = maskGen(em, hashGenerator.length, hashGenerator.length + 1, ModulusLength - 1 - hashGenerator.length);
+
+    xorNoCopy(em, seedMask, 1, hashGenerator.length);
+
+    var dbMask = maskGen(em, ModulusLength - hashGenerator.length - 1, 1, hashGenerator.length);
+
+    xorNoCopy(em, dbMask, hashGenerator.length + 1, ModulusLength - hashGenerator.length - 1);
+
+
+    for (var i = 0; i < hashGenerator.length; i++)
     {
-        ++i;
-    }
-    if (b.length - i != n - 1 || b[i] != 2)
-    {
-        return null;
-    }
-    ++i;
-    while (b[i] != 0)
-    {
-        if (++i >= b.length)
+        if (em[hashGenerator.length + 1 + i] != lhash[i])
         {
-            return null;
+            throw("data invalid");
         }
     }
-    var ret = "";
-    while (++i < b.length)
+
+    i = (hashGenerator.length << 1) + 1;
+    for (; em[i] == 0; i++)
     {
-        var c = b[i] & 255;
-        if (c < 128)
-        { // utf-8 decode
-            ret += String.fromCharCode(c);
-        }
-        else if ((c > 191) && (c < 224))
+    }
+    if (em[i++] != 1)
+    {
+        throw("data invalid");
+    }
+    var result = new Array(ModulusLength - i);
+    copyRange(em, i, result, 0, ModulusLength - i);
+    return result;
+}
+
+function decrypt(data, e, n, lhash)
+{
+    e = e || this.d;
+    n = n || this.n;
+    lhash = lhash || this.myhash;
+
+    var decryptedData = [];
+    var inputLen = data.length;
+    var offSet = 0;
+    // 对数据分段解密
+    while (inputLen - offSet > 0)
+    {
+        decryptedData = decryptedData.concat(decryptBlock(data, offSet, e, n, lhash));
+        offSet += ModulusLength;
+    }
+    return decryptedData;
+}
+
+function encrypt(data, e, n, lhash)
+{
+    e = e || this.e;
+    n = n || this.n;
+    lhash = lhash || this.myhash;
+
+    var inputLen = data.length;
+    var offSet = 0;
+    var encryptedData = [];
+
+    while (inputLen - offSet > 0)
+    {
+        encryptedData = encryptedData.concat(encryptBlock(data, offSet, Math.min(inputLen - offSet, MaxBlockSize), e, n, lhash));
+        offSet += MaxBlockSize;
+    }
+    return encryptedData;
+}
+
+function sign(m)
+{
+    var s = new String(m);
+
+    s += "#" + getPaddedHex(new Date().getTime(), 11) + getPaddedHex(this.count++, 2);
+
+    var h = hashGenerator.hash(string2codeBytes(m));
+    var sig = encryptBlock(h, 0, h.length, this.d, this.n, this.lhash);
+
+    m += "`" + bytes2base64(sig);
+    return m;
+}
+
+function verify(m)
+{
+    var strings = m.split("`");
+    var thisTimeStamp = strings[0].substring(strings[0].length() - 13);
+    if (thisTimeStamp <= this.lastTimeStamp)
+    {
+        return false;
+    }
+
+    var h = decryptBlock(string2codeBytes(base64toBytes(strings[1])), 0, this.ee, this.nn, this.myhash);
+    var restored = hashGenerator.hash(string2codeBytes(strings[0]));
+
+    for (var i = 0; i < h.length; i++)
+    {
+        if (h[i] != restored[i])
         {
-            ret += String.fromCharCode(((c & 31) << 6) | (b[i + 1] & 63));
-            ++i;
-        }
-        else
-        {
-            ret += String.fromCharCode(((c & 15) << 12) | ((b[i + 1] & 63) << 6) | (b[i + 2] & 63));
-            i += 2;
+            return false;
         }
     }
-    return ret;
+
+    this.lastTimeStamp = thisTimeStamp;
+    return true;
 }
 
 // "empty" RSA key constructor
 function RSAKey()
 {
     this.n = null;
-    this.e = 0;
+    this.e = null;
     this.d = null;
     this.p = null;
     this.q = null;
-    this.dmp1 = null;
-    this.dmq1 = null;
-    this.coeff = null;
-}
-// Set the public key fields N and e from hex strings
 
+    this.ee = null;
+    this.nn = null;
+    this.lhash = null;
+    this.myhash = null;
+    this.count = 0;
+    this.lastTimeStamp = null;
 
-function RSASetPublic(N, E)
-{
-    if (N != null && E != null && N.length > 0 && E.length > 0)
-    {
-        this.n = parseBigInt(N, 16);
-        this.e = parseInt(E, 16);
-    }
-    else
-    {
-        alert("Invalid RSA public key");
-    }
+    this.generate();
 }
 
-// Perform raw public operation on "x": return x^e (mod n)
-
-
-function RSADoPublic(x)
+// Generate a new random private key B bits long, using  expt E
+function RSAGenerate()
 {
-    return x.modPowInt(this.e, this.n);
-}
-
-// Return the PKCS#1 RSA encryption of "text" as an even-length hex string
-function RSAEncrypt(text)
-{
-    var m = pkcs1pad2(text, (this.n.bitLength() + 7) >> 3);
-    if (m == null)
-    {
-        return null;
-    }
-    var c = this.doPublic(m);
-    if (c == null)
-    {
-        return null;
-    }
-    var h = c.toString(16);
-    if ((h.length & 1) == 0)
-    {
-        return h;
-    }
-    else
-    {
-        return "0" + h;
-    }
-}
-
-// Return the PKCS#1 RSA encryption of "text" as a Base64-encoded string
-//function RSAEncryptB64(text) {
-//  var h = this.encrypt(text);
-//  if(h) return hex2b64(h); else return null;
-//}
-// protected
-RSAKey.prototype.doPublic = RSADoPublic;
-
-// public
-RSAKey.prototype.setPublic = RSASetPublic;
-RSAKey.prototype.encrypt = RSAEncrypt;
-
-// Set the private key fields N, e, and d from hex strings
-function RSASetPrivate(N, E, D)
-{
-    if (N != null && E != null && N.length > 0 && E.length > 0)
-    {
-        this.n = parseBigInt(N, 16);
-        this.e = parseInt(E, 16);
-        this.d = parseBigInt(D, 16);
-    }
-    else
-    {
-        alert("Invalid RSA private key");
-    }
-}
-
-// Set the private key fields N, e, d and CRT params from hex strings
-function RSASetPrivateEx(N, E, D, P, Q, DP, DQ, C)
-{
-    if (N != null && E != null && N.length > 0 && E.length > 0)
-    {
-        this.n = parseBigInt(N, 16);
-        this.e = parseInt(E, 16);
-        this.d = parseBigInt(D, 16);
-        this.p = parseBigInt(P, 16);
-        this.q = parseBigInt(Q, 16);
-        this.dmp1 = parseBigInt(DP, 16);
-        this.dmq1 = parseBigInt(DQ, 16);
-        this.coeff = parseBigInt(C, 16);
-    }
-    else
-    {
-        alert("Invalid RSA private key");
-    }
-}
-
-// Generate a new random private key B bits long, using public expt E
-function RSAGenerate(B, E)
-{
+    var B = 1024, E = "10001";
     var rng = new SeededRandom();
     var qs = B >> 1;
-    this.e = parseInt(E, 16);
-    var ee = new BigInteger(E, 16);
+    this.e = new BigInteger(E, 16);
+
     for (; ;)
     {
         for (; ;)
         {
             this.p = new BigInteger(B - qs, 1, rng);
-            if (this.p.subtract(BigInteger.ONE).gcd(ee).compareTo(BigInteger.ONE) == 0 && this.p.isProbablePrime(10))
+            if (this.p.subtract(BigInteger.ONE).gcd(this.e).compareTo(BigInteger.ONE) == 0 && this.p.isProbablePrime(10))
             {
                 break;
             }
@@ -251,7 +276,7 @@ function RSAGenerate(B, E)
         for (; ;)
         {
             this.q = new BigInteger(qs, 1, rng);
-            if (this.q.subtract(BigInteger.ONE).gcd(ee).compareTo(BigInteger.ONE) == 0 && this.q.isProbablePrime(10))
+            if (this.q.subtract(BigInteger.ONE).gcd(this.e).compareTo(BigInteger.ONE) == 0 && this.q.isProbablePrime(10))
             {
                 break;
             }
@@ -265,250 +290,20 @@ function RSAGenerate(B, E)
         var p1 = this.p.subtract(BigInteger.ONE);
         var q1 = this.q.subtract(BigInteger.ONE);
         var phi = p1.multiply(q1);
-        if (phi.gcd(ee).compareTo(BigInteger.ONE) == 0)
+        if (phi.gcd(this.e).compareTo(BigInteger.ONE) == 0)
         {
             this.n = this.p.multiply(this.q);
-            this.d = ee.modInverse(phi);
-            this.dmp1 = this.d.mod(p1);
-            this.dmq1 = this.d.mod(q1);
-            this.coeff = this.q.modInverse(this.p);
+            this.d = this.e.modInverse(phi);
             break;
         }
     }
+
+    this.myhash = hashGenerator.hash(this.n.toByteArray());
 }
 
-// Perform raw private operation on "x": return x^d (mod n)
-function RSADoPrivate(x)
-{
-    if (this.p == null || this.q == null)
-    {
-        return x.modPow(this.d, this.n);
-    }
-    // TODO: re-calculate any missing CRT params
-    var xp = x.mod(this.p).modPow(this.dmp1, this.p);
-    var xq = x.mod(this.q).modPow(this.dmq1, this.q);
-    while (xp.compareTo(xq) < 0)
-    {
-        xp = xp.add(this.p);
-    }
-    return xp.subtract(xq).multiply(this.coeff).mod(this.p).multiply(this.q).add(xq);
-}
-
-// Return the PKCS#1 RSA decryption of "ctext".
-// "ctext" is an even-length hex string and the output is a plain string.
-function RSADecrypt(ctext)
-{
-    var c = parseBigInt(ctext, 16);
-    var m = this.doPrivate(c);
-    if (m == null)
-    {
-        return null;
-    }
-    return pkcs1unpad2(m, (this.n.bitLength() + 7) >> 3);
-}
-
-// protected
-RSAKey.prototype.doPrivate = RSADoPrivate;
-
-// public
-RSAKey.prototype.setPrivate = RSASetPrivate;
-RSAKey.prototype.setPrivateEx = RSASetPrivateEx;
 RSAKey.prototype.generate = RSAGenerate;
-RSAKey.prototype.decrypt = RSADecrypt;
-
-
-//
-// rsa-sign.js - adding signing functions to RSAKey class.
-//
-//
-// version: 1.0 (2010-Jun-03)
-//
-// Copyright (c) 2010 Kenji Urushima (kenji.urushima@gmail.com)
-//
-// This software is licensed under the terms of the MIT License.
-// http://www.opensource.org/licenses/mit-license.php
-//
-// The above copyright and license notice shall be 
-// included in all copies or substantial portions of the Software.
-//
-// Depends on:
-//   function sha1.hex(s) of sha1.js
-//   jsbn.js
-//   jsbn2.js
-//   rsa.js
-//   rsa2.js
-//
-// keysize / pmstrlen
-//  512 /  128
-// 1024 /  256
-// 2048 /  512
-// 4096 / 1024
-// As for _RSASGIN_DIHEAD values for each hash algorithm, see PKCS#1 v2.1 spec (p38).
-var _RSASIGN_DIHEAD = [];
-_RSASIGN_DIHEAD['sha1'] = "3021300906052b0e03021a05000414";
-_RSASIGN_DIHEAD['sha256'] = "3031300d060960864801650304020105000420";
-//_RSASIGN_DIHEAD['md2'] = "3020300c06082a864886f70d020205000410";
-//_RSASIGN_DIHEAD['md5'] = "3020300c06082a864886f70d020505000410";
-//_RSASIGN_DIHEAD['sha384'] = "3041300d060960864801650304020205000430";
-//_RSASIGN_DIHEAD['sha512'] = "3051300d060960864801650304020305000440";
-var _RSASIGN_HASHHEXFUNC = [];
-_RSASIGN_HASHHEXFUNC['sha1'] = sha1.hex;
-_RSASIGN_HASHHEXFUNC['sha256'] = sha256.hex;
-
-// ========================================================================
-// Signature Generation
-// ========================================================================
-
-function _rsasign_getHexPaddedDigestInfoForString(s, keySize, hashAlg)
-{
-    var pmStrLen = keySize / 4;
-    var hashFunc = _RSASIGN_HASHHEXFUNC[hashAlg];
-    var sHashHex = hashFunc(s);
-
-    var sHead = "0001";
-    var sTail = "00" + _RSASIGN_DIHEAD[hashAlg] + sHashHex;
-    var sMid = "";
-    var fLen = pmStrLen - sHead.length - sTail.length;
-    for (var i = 0; i < fLen; i += 2)
-    {
-        sMid += "ff";
-    }
-    sPaddedMessageHex = sHead + sMid + sTail;
-    return sPaddedMessageHex;
-}
-
-function _rsasign_signString(s, hashAlg)
-{
-    var hPM = _rsasign_getHexPaddedDigestInfoForString(s, this.n.bitLength(), hashAlg);
-    var biPaddedMessage = parseBigInt(hPM, 16);
-    var biSign = this.doPrivate(biPaddedMessage);
-    var hexSign = biSign.toString(16);
-    return hexSign;
-}
-
-function _rsasign_signStringWithSHA1(s)
-{
-    var hPM = _rsasign_getHexPaddedDigestInfoForString(s, this.n.bitLength(), 'sha1');
-    var biPaddedMessage = parseBigInt(hPM, 16);
-    var biSign = this.doPrivate(biPaddedMessage);
-    var hexSign = biSign.toString(16);
-    return hexSign;
-}
-
-function _rsasign_signStringWithSHA256(s)
-{
-    var hPM = _rsasign_getHexPaddedDigestInfoForString(s, this.n.bitLength(), 'sha256');
-    var biPaddedMessage = parseBigInt(hPM, 16);
-    var biSign = this.doPrivate(biPaddedMessage);
-    var hexSign = biSign.toString(16);
-    return hexSign;
-}
-
-// ========================================================================
-// Signature Verification
-// ========================================================================
-
-function _rsasign_getDecryptSignatureBI(biSig, hN, hE)
-{
-    var rsa = new RSAKey();
-    rsa.setPublic(hN, hE);
-    var biDecryptedSig = rsa.doPublic(biSig);
-    return biDecryptedSig;
-}
-
-function _rsasign_getHexDigestInfoFromSig(biSig, hN, hE)
-{
-    var biDecryptedSig = _rsasign_getDecryptSignatureBI(biSig, hN, hE);
-    var hDigestInfo = biDecryptedSig.toString(16).replace(/^1f+00/, '');
-    return hDigestInfo;
-}
-
-function _rsasign_getAlgNameAndHashFromHexDisgestInfo(hDigestInfo)
-{
-    for (var algName in _RSASIGN_DIHEAD)
-    {
-        var head = _RSASIGN_DIHEAD[algName];
-        var len = head.length;
-        if (hDigestInfo.substring(0, len) == head)
-        {
-            var a = [algName, hDigestInfo.substring(len)];
-            return a;
-        }
-    }
-    return [];
-}
-
-function _rsasign_verifySignatureWithArgs(sMsg, biSig, hN, hE)
-{
-    var hDigestInfo = _rsasign_getHexDigestInfoFromSig(biSig, hN, hE);
-    var digestInfoAry = _rsasign_getAlgNameAndHashFromHexDisgestInfo(hDigestInfo);
-    if (digestInfoAry.length == 0)
-    {
-        return false;
-    }
-    var algName = digestInfoAry[0];
-    var diHashValue = digestInfoAry[1];
-    var ff = _RSASIGN_HASHHEXFUNC[algName];
-    var msgHashValue = ff(sMsg);
-    return (diHashValue == msgHashValue);
-}
-
-function _rsasign_verifyHexSignatureForMessage(hSig, sMsg)
-{
-    var biSig = parseBigInt(hSig, 16);
-    var result = _rsasign_verifySignatureWithArgs(sMsg, biSig, this.n.toString(16), this.e.toString(16));
-    return result;
-}
-
-function _rsasign_verifyString(sMsg, hSig)
-{
-    hSig = hSig.replace(/[ \n]+/g, "");
-    var biSig = parseBigInt(hSig, 16);
-    var biDecryptedSig = this.doPublic(biSig);
-    var hDigestInfo = biDecryptedSig.toString(16).replace(/^1f+00/, '');
-    var digestInfoAry = _rsasign_getAlgNameAndHashFromHexDisgestInfo(hDigestInfo);
-
-    if (digestInfoAry.length == 0)
-    {
-        return false;
-    }
-    var algName = digestInfoAry[0];
-    var diHashValue = digestInfoAry[1];
-    var ff = _RSASIGN_HASHHEXFUNC[algName];
-    var msgHashValue = ff(sMsg);
-    return (diHashValue == msgHashValue);
-}
-
-RSAKey.prototype.signString = _rsasign_signString;
-RSAKey.prototype.signStringWithSHA1 = _rsasign_signStringWithSHA1;
-RSAKey.prototype.signStringWithSHA256 = _rsasign_signStringWithSHA256;
-
-RSAKey.prototype.verifyString = _rsasign_verifyString;
-RSAKey.prototype.verifyHexSignatureForMessage = _rsasign_verifyHexSignatureForMessage;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+RSAKey.prototype.encrypt = encrypt;
+RSAKey.prototype.decrypt = decrypt;
+RSAKey.prototype.sign = sign;
+RSAKey.prototype.verify = verify;
+RSAKey.prototype.addConterpart = addConterpart;

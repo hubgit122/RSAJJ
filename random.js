@@ -293,7 +293,7 @@
 
     //
     // When seedrandom.js is loaded, we immediately mix a few bits
-    // from the built-in RNG into the entropy pool.  Because we do
+    // from the built-in RNG into the entropy pool.  Because we doPublic
     // not want to intefere with determinstic PRNG state later,
     // seedrandom will not call math.random on its own again after
     // initialization.
