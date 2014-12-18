@@ -25,7 +25,8 @@ function addConterpart(n, e)
     this.ee = e;
     this.lhash = hashGenerator.hash(n.toByteArray());
     this.count = 0;
-    this.lastTimeStamp = "0000000000000";
+    this.lastTimeStamp = "";
+    this.lastCount = "";
 }
 
 //整数, 填充到len长, 不检查
@@ -132,9 +133,7 @@ function decryptBlock(data, offset, e, n, lhash)
     copyRange(data, offset, c, 0, ModulusLength);
 
     var em = trimToK(doModPow(c, e, n));
-
     var seedMask = maskGen(em, hashGenerator.length, hashGenerator.length + 1, ModulusLength - 1 - hashGenerator.length);
-
     xorNoCopy(em, seedMask, 1, hashGenerator.length);
 
     var dbMask = maskGen(em, ModulusLength - hashGenerator.length - 1, 1, hashGenerator.length);
@@ -201,7 +200,7 @@ function encrypt(data, e, n, lhash)
 
 function sign(m)
 {
-    m += "#" + getPaddedHex(new Date().getTime(), 11) + getPaddedHex(this.count++, 2);
+    m += "@" + getPaddedHex(new Date().getTime(), 11) + "#"+getPaddedHex(this.count++, 11);
     var h = hashGenerator.hash(string2codeBytes(m));
     var sig = encryptBlock(h, 0, h.length, this.d, this.n, this.lhash);
 
@@ -211,15 +210,18 @@ function sign(m)
 
 function verify(m)
 {
-    var strings = m.split("`");
-    var thisTimeStamp = strings[0].substring(strings[0].length - 13);
-    if (thisTimeStamp <= this.lastTimeStamp)
+    var parts = m.split("`");
+    var msg = parts[0];
+    var hash = parts[1];
+    parts = msg.split(/@|#/);
+
+    if (parts[1] < this.lastTimeStamp || parts[2] <= this.lastCount)
     {
         return false;
     }
 
-    var h = decryptBlock(base64toBytes(strings[1]), 0, this.ee, this.nn, this.myhash);
-    var restored = hashGenerator.hash(string2codeBytes(strings[0]));
+    var h = decryptBlock(base64toBytes(hash), 0, this.ee, this.nn, this.myhash);
+    var restored = hashGenerator.hash(string2codeBytes(msg));
 
     for (var i = 0; i < h.length; i++)
     {
@@ -229,7 +231,8 @@ function verify(m)
         }
     }
 
-    this.lastTimeStamp = thisTimeStamp;
+    this.lastTimeStamp = parts[1];
+    this.lastCount = parts[2];
     return true;
 }
 
