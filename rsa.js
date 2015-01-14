@@ -204,13 +204,13 @@ function sign(m)
     var h = hashGenerator.hash(string2codeBytes(m));
     var sig = encryptBlock(h, 0, h.length, this.d, this.n, this.lhash);
 
-    m += "`" + bytes2base64(sig);
+    m += "^" + bytes2base64(sig);
     return m;
 }
 
 function verify(m)
 {
-    var parts = m.split("`");
+    var parts = m.split("^");
     var msg = parts[0];
     var hash = parts[1];
     parts = msg.split(/@|#/);
