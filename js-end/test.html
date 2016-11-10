@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="gbk"/>
+    <meta http-equiv="Content-Type" content="text/html;">
+    <script language="JavaScript" type="text/javascript" src="jsbn.js"></script>
+    <script language="JavaScript" type="text/javascript" src="random.js"></script>
+    <script language="JavaScript" type="text/javascript" src="myMD5.js"></script>
+    <script language="JavaScript" type="text/javascript" src="utils.js"></script>
+    <script language="JavaScript" type="text/javascript" src="rsa.js"></script>
+
+    <script>
+        var tmp;
+        
+        print("*************testing utils**************")
+        
+        print("bytesToHexString: " + bytesToHexString([0, 1, 2, 25, 127, 255]));
+        print("int2bytes: " + bytesToHexString(int2bytes(0xff01)));
+        print("string2codeBytes: " + bytesToHexString(string2codeBytes("既有中文又有英文 Chinese goes with English")));
+        print("string2codeBytes: " + string2codeBytes("既有中文又有英文 Chinese goes with English"));
+        
+        tmp = utf8Encode("既有中文又有英文 Chinese goes with English");
+        print("utf8Encode: " + bytesToHexString(tmp));
+        print("utf8Decode: " + utf8decode(tmp));
+        print("bytes2base64: " + bytes2base64(tmp));
+        print("base64toBytes: " + utf8decode(base64toBytes(bytes2base64(tmp))));
+        print("getPaddedHex: " + getPaddedHex(1, 5));
+        print("getPaddedHex: " + getPaddedHex(655364564, 5));
+        print("hexStringToBytes: " + hexStringToBytes(getPaddedHex(1, 8)));
+        print("hexStringToBytes: " + hexStringToBytes(getPaddedHex(655364564, 8)));
+        print("MD5:" + bytesToHexString(MD5(utf8Encode(tmp))));
+        
+        var a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+        var b = ["a", "b", 1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+        copyRange(a, 2, b, 3, 7);
+        print("copyRange: " + b + a);
+        
+        var c = [2, 3, 4, 5, 6, 7, 8, 9, 0, 1];
+        xorNoCopy(a, c, 1, 7);
+        print("xorNoCopy: " + c + a);
+        
+        tmp = ("FF", 16);
+        print("parseBigInt: " + tmp.toString(16));
+
+        print("*************testing RSA**************")
+        var rsa = new RSAKey();
+        print("RSA e: " + rsa.e.toString(16));
+        print("RSA d: " + rsa.d.toString(16));
+        print("RSA N: " + rsa.n.toString(16));
+
+        var en = rsa.encrypt(utf8Encode("既有中文又有英文 Chinese goes with English"));
+        print("RSA encrypt: " + bytesToHexString(en));
+        print("RSA decrypt: " + utf8decode(rsa.decrypt(en)));
+    
+        print("*************testing custom partner system*********")
+        rsa.addConterpart(rsa.n, rsa.e);
+        tmp = rsa.sign("test");
+        print(tmp);
+        print(rsa.verify(tmp))
+    </script>
+</head>
+
+<body style="font-family: monospace; white-space:pre;">
+
+</body>
+</html>
