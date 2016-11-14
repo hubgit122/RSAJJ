@@ -11,8 +11,9 @@ All the implementations are consistent with the standards -- [X.509](https://en.
 The BigInt classes on both sides were implemented by others, I just translated the word of those standards into programming codes. 
 
 See -- 
-[Java BigInteger](https://docs.oracle.com/javase/7/docs/api/java/math/BigInteger.html)
-[crypto.js](https://github.com/wwwtyro/cryptico.git)
+* [Java BigInteger](https://docs.oracle.com/javase/7/docs/api/java/math/BigInteger.html)
+
+* [crypto.js](https://github.com/wwwtyro/cryptico.git)
 
 ## What's Original
 There is also a signature scheme built in both sides, which is of my own design. Even though the prime idea of signature is just the process of encrypt the message by the private key, there are many things to consider in the internet environment because of the introduce of so many third parties, such as:
